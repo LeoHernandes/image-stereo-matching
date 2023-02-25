@@ -3,32 +3,6 @@ from typing import Tuple
 import cv2 as cv
 import numpy as np
 
-def is_in_bounds(im_shape: int, im_width: int, row: int, col: int) -> bool:
-    """
-    Test if a pixel coordinate is in bounds of a image
-    :param im_height: image height
-    :param im_width: image width
-    :param row: y coordinate of a pixel
-    :param col: x coordinate of a pixel
-    :return: True if is in bounds, False if is not
-    """
-    if(row < 0 or row > im_shape - 1): return False
-    if(col < 0 or col > im_width - 1): return False
-    return True
-
-
-def square_euclidian_distance(pixel_1: np.ndarray, pixel_2: np.ndarray) -> int:
-    """
-    Calculate the squared euclidian distance between two pixels
-    :param pixel_1: array representing the values of the first pixel
-    :param pixel_2: array representing the values of the second pixel
-    :return: squared euclidian distance
-    """
-    L_1, a_1, b_1 = pixel_1
-    L_2, a_2, b_2 = pixel_2
-    return (L_1 - L_2)**2 + (a_1 - a_2)**2 + (b_1 - b_2)**2
-
-
 def sum_squared_distances(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tuple[int, int], r_win_center: Tuple[int, int], win_size: int) -> int:
     """
     Calculate the sum squared distances between two windows of pixels in two images
@@ -39,22 +13,11 @@ def sum_squared_distances(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tupl
     :param win_size: window size (N x N)
     :return: sum squared distances
     """
-    height = l_im.shape[0]
-    width = l_im.shape[1]
-    left_row, left_col = l_win_center
-    right_row, right_col = r_win_center
+    apothem = int(win_size/2)
+    l_win = l_im[l_win_center[0] - apothem : l_win_center[0] + apothem + 1, l_win_center[1] - apothem : l_win_center[1] + apothem + 1]
+    r_win = r_im[r_win_center[0] - apothem : r_win_center[0] + apothem + 1, r_win_center[1] - apothem : r_win_center[1] + apothem + 1]
     
-    ssd = 0
-    for window_row in range (-int(win_size/2), int(win_size/2) + 1):
-        for window_col in range (-int(win_size/2), int(win_size/2) + 1):
-            left_pixel = np.zeros(3) # Represents the zero padding when window goes out of bounds
-            right_pixel = np.zeros(3)
-            if is_in_bounds(height, width, window_row + left_row, window_col + left_col):
-                left_pixel = l_im[window_row + left_row, window_col + left_col]
-            if is_in_bounds(height, width, window_row + right_row, window_col + right_col):
-                right_pixel = r_im[window_row + right_row, window_col + right_col]
-            ssd += square_euclidian_distance(left_pixel, right_pixel)
-
+    ssd = np.sum((l_win - r_win)**2)
     return ssd
 
 
@@ -65,13 +28,16 @@ def min_epipolar_line_distance(l_im: np.ndarray, r_im: np.ndarray, cur_pixel: Tu
     :param r_im: right image of the stereo matching
     :param cur_pixel: coordinates of the current pixel in left image
     :param win_size: window size (N x N)
-    :return: list of the sum squared distances with the corresponding column coordinate 
+    :return: tuple with the minimum distance and its corresponding column coordinate 
     """
     distance = (sys.maxsize, 0)
-    image_width = l_im.shape[1]
+    cur_row, cur_col = cur_pixel
+    # only search at a maximum 64 pixel distance from current block position
+    min_col = int(win_size/2) if cur_col <= 64 + int(win_size/2) else cur_col - 64
     
-    for col in range(0, image_width):
-        ssd = sum_squared_distances(l_im, r_im, cur_pixel, (cur_pixel[0], col), win_size)
+    # Only search the matching block on the left side of the current pixel
+    for col in range(min_col, cur_pixel[1] + 1):
+        ssd = sum_squared_distances(l_im, r_im, cur_pixel, (cur_row, col), win_size)
         if(ssd < distance[0]):
             distance = (ssd, col)
     
@@ -94,8 +60,8 @@ def stereo_matching(l_image_path: str, r_image_path: str, gt_image_path: str, wi
     image_width = left_image.shape[1]
     result = np.zeros((image_height,image_width), dtype=np.uint8)
     
-    for row in range(0, image_height):
-        for col in range(0, image_width):
+    for row in range(int(win_size/2), image_height - int(win_size/2)):
+        for col in range(int(win_size/2), image_width - int(win_size/2)):
             min_distance = min_epipolar_line_distance(left_image, right_image, (row, col), win_size)
             result[row, col] = abs(col - min_distance[1])
             
