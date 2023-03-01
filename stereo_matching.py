@@ -2,6 +2,7 @@ import sys
 from typing import Tuple
 import cv2 as cv
 import numpy as np
+import re
 
 def sum_squared_distances(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tuple[int, int], r_win_center: Tuple[int, int], win_size: int) -> int:
     """
@@ -30,10 +31,12 @@ def min_epipolar_line_distance(l_im: np.ndarray, r_im: np.ndarray, cur_pixel: Tu
     :param win_size: window size (N x N)
     :return: tuple with the minimum distance and its corresponding column coordinate 
     """
+    MAX_DISTANCE = 64
+    
     distance = (sys.maxsize, 0)
     cur_row, cur_col = cur_pixel
-    # only search at a maximum 64 pixel distance from current block position
-    min_col = int(win_size/2) if cur_col <= 64 + int(win_size/2) else cur_col - 64
+    # only search at a maximum amount of pixel distance from current block position
+    min_col = int(win_size/2) if cur_col <= MAX_DISTANCE + int(win_size/2) else cur_col - MAX_DISTANCE
     
     # Only search the matching block on the left side of the current pixel
     for col in range(min_col, cur_pixel[1] + 1):
@@ -65,7 +68,11 @@ def stereo_matching(l_image_path: str, r_image_path: str, gt_image_path: str, wi
             min_distance = min_epipolar_line_distance(left_image, right_image, (row, col), win_size)
             result[row, col] = abs(col - min_distance[1])
             
-    cv.imshow("result", result)
+    cv.normalize(result, result, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
+
+    image_name = re.split('/|-', l_image_path)[1]
+    cv.imwrite("depth_maps/" + image_name + "-window-" + str(win_size) + ".png", result)
+    cv.imshow("test", result)
     cv.imshow("gt", ground_thruth)
-    
+        
     cv.waitKey(0)
