@@ -1,8 +1,47 @@
+import math
 import sys
 from typing import Tuple
 import cv2 as cv
 import numpy as np
 import re
+
+def rms_result_evaluation(result: np.ndarray, ground_thruth: np.ndarray, win_size: int) -> float:
+    """
+    Evaluate the result depth map and the ground thruth with root mean square
+    :param result: result depth map
+    :param ground_thruth: ground thruth depth map
+    :param win_size: window size (N x N)
+    :return: root mean square
+    """
+    apothem = int(win_size/2)
+    height = result.shape[0]
+    width = result.shape[1]
+    
+    square_diff = (result - ground_thruth)**2
+    # sum only the pixels with depth information, disconsidering the borders based on window size
+    square_sum = np.sum(square_diff[apothem : height - apothem, apothem : width - apothem])
+    rms = math.sqrt(square_sum/float(height * width))
+    return rms
+
+
+def bad_pixels_result_evaluation(result: np.ndarray, ground_thruth: np.ndarray, win_size: int) -> float:
+    """
+    Evaluate the result depth map and the ground thruth with the percentage of bad pixels
+    :param result: result depth map
+    :param ground_thruth: ground thruth depth map
+    :param win_size: window size (N x N)
+    :return: percentage of bad pixels
+    """
+    THRESHOLD = 5
+    apothem = int(win_size/2)
+    height = result.shape[0]
+    width = result.shape[1]
+    
+    diff = np.abs(result - ground_thruth)
+    bad_pixels_mat = np.where(diff[apothem : height - apothem, apothem : width - apothem] > THRESHOLD, 1, 0)
+    percentage = (np.sum(bad_pixels_mat)/float(height * width))*100
+    return percentage
+
 
 def sum_squared_distances(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tuple[int, int], r_win_center: Tuple[int, int], win_size: int) -> int:
     """
@@ -85,7 +124,7 @@ def stereo_matching(l_image_path: str, r_image_path: str, gt_image_path: str, wi
     """
     left_image = cv.cvtColor(cv.imread(l_image_path), cv.COLOR_BGR2Lab) 
     right_image = cv.cvtColor(cv.imread(r_image_path), cv.COLOR_BGR2Lab)
-    ground_thruth = cv.imread(gt_image_path)
+    ground_thruth = cv.imread(gt_image_path, cv.IMREAD_GRAYSCALE)
     
     image_height = left_image.shape[0]
     image_width = left_image.shape[1]
@@ -96,11 +135,19 @@ def stereo_matching(l_image_path: str, r_image_path: str, gt_image_path: str, wi
             min_distance = min_epipolar_line_distance(left_image, right_image, (row, col), win_size, err_type)
             result[row, col] = abs(col - min_distance[1])
             
-    cv.normalize(result, result, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
-
     image_name = re.split('/|-', l_image_path)[1]
-    cv.imwrite("depth_maps/" + image_name + "-window" + str(win_size) + "-err" + str(err_type) + ".png", result)
-    cv.imshow("test", result)
-    cv.imshow("gt", ground_thruth)
-        
-    cv.waitKey(0)
+    file_name = "depth_maps/" + image_name + "-window" + str(win_size) + "-err" + str(err_type)
+    cv.imwrite(file_name + ".png", result)
+    log_result_evaluations(result, ground_thruth, win_size, file_name)
+
+
+def log_result_evaluations(result: np.ndarray, ground_thruth: np.ndarray, win_size: int, file_name:str):
+    rms = rms_result_evaluation(result, ground_thruth//4, win_size)
+    percentage = bad_pixels_result_evaluation(result, ground_thruth//4, win_size)
+    
+    f = open(file_name + ".txt", "w")    
+    f.write("Results:\n")
+    f.write("-----------------\n")
+    f.write("Root Mean Square: " + str(rms) + "\n")
+    f.write("Percentage of bad pixels: " + str(percentage) + "%")
+    f.close()  
