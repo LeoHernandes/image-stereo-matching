@@ -1,0 +1,4 @@
+Results:
+-----------------
+Root Mean Square: 4.1471982510284375
+Percentage of bad pixels: 19.083259259259258%

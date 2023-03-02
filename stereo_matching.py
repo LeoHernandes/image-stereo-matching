@@ -61,15 +61,15 @@ def sum_squared_distances(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tupl
     return ssd
 
 
-def robust_error_function(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tuple[int, int], r_win_center: Tuple[int, int], win_size: int) -> int:
+def robust_cost_function(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tuple[int, int], r_win_center: Tuple[int, int], win_size: int) -> int:
     """
-    Calculate a robust error function based on ssd between two windows of pixels in two images
+    Calculate a robust cost function based on ssd between two windows of pixels in two images
     :param l_im: left image of the stereo matching
     :param r_im: right image of the stereo matching
     :param l_win_center: the window center of left image
     :param r_win_center: the window center of right image
     :param win_size: window size (N x N)
-    :return: robust error function cost
+    :return: robust cost function result
     """
     apothem = int(win_size/2)
     l_win = l_im[l_win_center[0] - apothem : l_win_center[0] + apothem + 1, l_win_center[1] - apothem : l_win_center[1] + apothem + 1]
@@ -84,14 +84,14 @@ def robust_error_function(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tupl
     return zssd
 
 
-def min_epipolar_line_distance(l_im: np.ndarray, r_im: np.ndarray, cur_pixel: Tuple[int, int], win_size: int, err_type: int) -> Tuple[int, int]:
+def min_epipolar_line_distance(l_im: np.ndarray, r_im: np.ndarray, cur_pixel: Tuple[int, int], win_size: int, cost_type: int) -> Tuple[int, int]:
     """
     Calculate the error between the blocks around each pixel in the epipolar line 
     :param l_im: left image of the stereo matching
     :param r_im: right image of the stereo matching
     :param cur_pixel: coordinates of the current pixel in left image
     :param win_size: window size (N x N)
-    :param err_type: type of error function. 0 = default SSD, 1 = robust error function
+    :param err_type: type of cost function. 0 = default SSD, 1 = robust cost function
     :return: tuple with the minimum distance and its corresponding column coordinate 
     """
     MAX_DISTANCE = 64
@@ -103,24 +103,24 @@ def min_epipolar_line_distance(l_im: np.ndarray, r_im: np.ndarray, cur_pixel: Tu
     
     # Only search the matching block on the left side of the current pixel
     for col in range(min_col, cur_pixel[1] + 1):
-        error = 0
-        if err_type == 0:
-            error = sum_squared_distances(l_im, r_im, cur_pixel, (cur_row, col), win_size)
-        elif err_type == 1:
-            error = robust_error_function(l_im, r_im, cur_pixel, (cur_row, col), win_size)
-        if(error < distance[0]):
-            distance = (error, col)
+        cost = 0
+        if cost_type == 0:
+            cost = sum_squared_distances(l_im, r_im, cur_pixel, (cur_row, col), win_size)
+        elif cost_type == 1:
+            cost = robust_cost_function(l_im, r_im, cur_pixel, (cur_row, col), win_size)
+        if(cost < distance[0]):
+            distance = (cost, col)
     
     return distance
 
 
-def stereo_matching(l_image_path: str, r_image_path: str, gt_image_path: str, win_size: int, err_type: int):
+def stereo_matching(l_image_path: str, r_image_path: str, gt_image_path: str, win_size: int, cost_type: int):
     """
     Calculate the depth mapping by stereo matching
     :param l_image_path: left image path of the stereo matching
     :param r_image_path: right image path of the stereo matching
     :param gt_image_path: ground thruth image of the depth mapping with left image as reference
-    :param err_type: type of error function. 0 = default SSD, 1 = robust error function
+    :param err_type: type of cost function. 0 = default SSD, 1 = robust cost function
     :param win_size: window size (N x N)
     """
     left_image = cv.cvtColor(cv.imread(l_image_path), cv.COLOR_BGR2Lab) 
@@ -133,11 +133,11 @@ def stereo_matching(l_image_path: str, r_image_path: str, gt_image_path: str, wi
     
     for row in range(int(win_size/2), image_height - int(win_size/2)):
         for col in range(int(win_size/2), image_width - int(win_size/2)):
-            min_distance = min_epipolar_line_distance(left_image, right_image, (row, col), win_size, err_type)
+            min_distance = min_epipolar_line_distance(left_image, right_image, (row, col), win_size, cost_type)
             result[row, col] = abs(col - min_distance[1])
             
     image_name = re.split('/|-', l_image_path)[1]
-    file_name = "depth_maps/" + image_name + "-window" + str(win_size) + "-err" + str(err_type)
+    file_name = "depth_maps/" + image_name + "-window" + str(win_size) + "-cost" + str(cost_type)
     cv.imwrite(file_name + ".png", result)
     log_result_evaluations(result, ground_thruth, win_size, file_name)
 
