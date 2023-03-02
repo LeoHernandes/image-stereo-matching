@@ -75,12 +75,13 @@ def robust_error_function(l_im: np.ndarray, r_im: np.ndarray, l_win_center: Tupl
     l_win = l_im[l_win_center[0] - apothem : l_win_center[0] + apothem + 1, l_win_center[1] - apothem : l_win_center[1] + apothem + 1]
     r_win = r_im[r_win_center[0] - apothem : r_win_center[0] + apothem + 1, r_win_center[1] - apothem : r_win_center[1] + apothem + 1]
     
-    t_value = 1
-    diffs = np.absolute(l_win - r_win)
-    expoent_mat = (diffs - t_value)/ (0.14 * t_value)
-    error_mat = 255/(1 + np.exp(-expoent_mat))
+    l_win_mean = np.sum(l_win)/(l_win.shape[0] * l_win.shape[1])
+    r_win_mean = np.sum(r_win)/(r_win.shape[0] * r_win.shape[1])
+    zero_mean_l_win = l_win - l_win_mean
+    zero_mean_r_win = r_win - r_win_mean
+    zssd = np.sum((zero_mean_l_win - zero_mean_r_win)**2)
     
-    return np.sum(error_mat)
+    return zssd
 
 
 def min_epipolar_line_distance(l_im: np.ndarray, r_im: np.ndarray, cur_pixel: Tuple[int, int], win_size: int, err_type: int) -> Tuple[int, int]:
